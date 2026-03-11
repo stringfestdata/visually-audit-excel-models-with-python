@@ -53,13 +53,21 @@ if named_ranges_map:
         for row in ws.iter_rows():
             for cell in row:
                 if cell.data_type == "f" and cell.value:
-                    formula = cell.value
+                    formula = get_formula_str(cell.value)
                     for name in sorted_names:
                         pattern = re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE)
                         formula = pattern.sub(named_ranges_map[name], formula)
                     cell.value = formula
 
 # --- Helpers ---
+def get_formula_str(value):
+    """Return the formula as a plain string.
+    openpyxl returns dynamic array formulas (FILTER, UNIQUE, SORT, XLOOKUP, etc.)
+    as ArrayFormula objects rather than strings — unwrap them here."""
+    if hasattr(value, "text"):   # ArrayFormula namedtuple
+        return value.text or ""
+    return value or ""
+
 def expand_range(sheet, start, end):
     col1, row1 = coordinate_from_string(start)
     col2, row2 = coordinate_from_string(end)
@@ -103,7 +111,7 @@ for sheet in sheet_names:
         for cell in row:
             location = f"{sheet}!{cell.coordinate}"
             if cell.data_type == "f":
-                formula = cell.value
+                formula = get_formula_str(cell.value)
                 for r in re.findall(range_pattern, formula):
                     rng_sheet, start, end = r
                     rng_sheet = rng_sheet.strip("'")
