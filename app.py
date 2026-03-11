@@ -111,8 +111,13 @@ for sheet in sheet_names:
 
 # --- Build cell-level dependency graph ---
 G = nx.DiGraph()
-cell_pattern = r"[A-Za-z_']+!\$?[A-Za-z]+\$?\d+"
-range_pattern = r"([A-Za-z_']+)!([A-Za-z]+\d+):([A-Za-z]+\d+)"
+
+# Sheet name: either quoted (allowing spaces) e.g. 'Balance Sheet', or plain word e.g. FinStat
+_sheet = r"(?:'[^']+'|[A-Za-z_][A-Za-z_0-9]*)"
+# Individual cell ref:  Sheet!A1  or  'Sheet Name'!$A$1
+cell_pattern    = rf"{_sheet}!\$?[A-Za-z]{{1,3}}\$?\d+"
+# Range ref:            Sheet!A1:B10
+range_pattern   = rf"({_sheet})!([A-Za-z]{{1,3}}\d+):([A-Za-z]{{1,3}}\d+)"
 
 for sheet in sheet_names:
     ws = wb[sheet]
@@ -128,7 +133,10 @@ for sheet in sheet_names:
                         G.add_edge(ref, location)
                 for ref in re.findall(cell_pattern, formula):
                     ref = ref.replace("$", "").strip("'")
-                    G.add_edge(ref, location)
+                    # Re-attach clean sheet name: strip quotes then rebuild
+                    parts = ref.split("!")
+                    if len(parts) == 2:
+                        G.add_edge(ref, location)
 
 for cell in hardcoded_cells:
     if cell not in G:
