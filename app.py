@@ -98,6 +98,25 @@ if named_ranges_map:
                         formula = pattern.sub(named_ranges_map[name], formula)
                     cell.value = formula
 
+# --- Identify dynamic array spill ranges ---
+# ArrayFormula anchor cells store a .ref covering the full spill range.
+# Excel caches the spilled numeric values in the file, so openpyxl reads
+# those cells as data_type=="n" — indistinguishable from hardcoded constants
+# unless we explicitly exclude them.
+spill_cells = set()
+for sheet in sheet_names:
+    ws = wb[sheet]
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.data_type == "f" and hasattr(cell.value, "ref") and cell.value.ref:
+                ref = cell.value.ref.replace("$", "")
+                if ":" in ref:
+                    start, end = ref.split(":")
+                    for spill_ref in expand_range(sheet, start, end):
+                        spill_cells.add(spill_ref)
+                else:
+                    spill_cells.add(f"{sheet}!{ref}")
+
 # --- Detect hardcoded constants ---
 hardcoded_cells = set()
 for sheet in sheet_names:
@@ -106,8 +125,9 @@ for sheet in sheet_names:
     ws = wb[sheet]
     for row in ws.iter_rows():
         for cell in row:
-            if cell.data_type == "n" and cell.value is not None:
-                hardcoded_cells.add(f"{sheet}!{cell.coordinate}")
+            location = f"{sheet}!{cell.coordinate}"
+            if cell.data_type == "n" and cell.value is not None and location not in spill_cells:
+                hardcoded_cells.add(location)
 
 # --- Build cell-level dependency graph ---
 G = nx.DiGraph()
@@ -218,6 +238,8 @@ col1.metric("Sheets", len(sheet_names))
 col2.metric("Formula cells", len(G.nodes))
 col3.metric("Dependencies", len(G.edges))
 col4.metric("Hardcoded constants", len(hardcoded_cells))
+if spill_cells:
+    st.caption(f"{len(spill_cells)} dynamic array spill cells detected and excluded from hardcoded constant check.")
 
 # --- Detail tables ---
 col_a, col_b = st.columns(2)
