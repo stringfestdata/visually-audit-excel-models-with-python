@@ -25,6 +25,36 @@ if uploaded_file is None:
     st.info("Upload an Excel file in the sidebar to get started.")
     st.stop()
 
+# --- Helpers ---
+def get_formula_str(value):
+    """Return the formula as a plain string.
+    openpyxl returns dynamic array formulas (FILTER, UNIQUE, SORT, XLOOKUP, etc.)
+    as ArrayFormula objects rather than strings — unwrap them here."""
+    if hasattr(value, "text"):   # ArrayFormula namedtuple
+        return value.text or ""
+    return value or ""
+
+def expand_range(sheet, start, end):
+    col1, row1 = coordinate_from_string(start)
+    col2, row2 = coordinate_from_string(end)
+    col1_i = column_index_from_string(col1)
+    col2_i = column_index_from_string(col2)
+    cells = []
+    for col in range(col1_i, col2_i + 1):
+        for row in range(row1, row2 + 1):
+            cells.append(f"{sheet}!{get_column_letter(col)}{row}")
+    return cells
+
+def node_color(node, hardcoded_cells):
+    if node in hardcoded_cells:
+        return "gold"
+    sheet = node.split("!")[0]
+    if sheet in input_sheet_list:
+        return "lightgreen"
+    colors = ["lightskyblue", "salmon", "plum", "peachpuff", "lightcyan"]
+    idx = sheet_names.index(sheet) if sheet in sheet_names else -1
+    return colors[idx % len(colors)]
+
 # --- Load workbook ---
 wb = openpyxl.load_workbook(uploaded_file, data_only=False)
 sheet_names = wb.sheetnames
@@ -58,36 +88,6 @@ if named_ranges_map:
                         pattern = re.compile(r"\b" + re.escape(name) + r"\b", re.IGNORECASE)
                         formula = pattern.sub(named_ranges_map[name], formula)
                     cell.value = formula
-
-# --- Helpers ---
-def get_formula_str(value):
-    """Return the formula as a plain string.
-    openpyxl returns dynamic array formulas (FILTER, UNIQUE, SORT, XLOOKUP, etc.)
-    as ArrayFormula objects rather than strings — unwrap them here."""
-    if hasattr(value, "text"):   # ArrayFormula namedtuple
-        return value.text or ""
-    return value or ""
-
-def expand_range(sheet, start, end):
-    col1, row1 = coordinate_from_string(start)
-    col2, row2 = coordinate_from_string(end)
-    col1_i = column_index_from_string(col1)
-    col2_i = column_index_from_string(col2)
-    cells = []
-    for col in range(col1_i, col2_i + 1):
-        for row in range(row1, row2 + 1):
-            cells.append(f"{sheet}!{get_column_letter(col)}{row}")
-    return cells
-
-def node_color(node, hardcoded_cells):
-    if node in hardcoded_cells:
-        return "gold"
-    sheet = node.split("!")[0]
-    if sheet in input_sheet_list:
-        return "lightgreen"
-    colors = ["lightskyblue", "salmon", "plum", "peachpuff", "lightcyan"]
-    idx = sheet_names.index(sheet) if sheet in sheet_names else -1
-    return colors[idx % len(colors)]
 
 # --- Detect hardcoded constants ---
 hardcoded_cells = set()
